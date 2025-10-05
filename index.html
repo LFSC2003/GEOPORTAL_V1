@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geoportal Supabase</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      height: 100vh; display: flex; flex-direction: column; color: #333;
+    }
+    
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; padding: 1.2rem 2rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }
+    h1 { font-size: 1.6rem; font-weight: 700; }
+    
+    .config-panel {
+      background: #f8f9fa; padding: 1rem 2rem;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;
+    }
+    .input-group { flex: 1; min-width: 250px; }
+    .input-group label { 
+      display: block; font-size: 0.85rem; font-weight: 600; 
+      color: #4a5568; margin-bottom: 0.4rem;
+    }
+    .input-group small {
+      display: block; color: #6b7280; font-size: 0.75rem; margin-top: 0.2rem;
+    }
+    .input-group input {
+      width: 100%; padding: 0.7rem; border: 1px solid #d1d5db;
+      border-radius: 8px; font-size: 0.9rem; transition: all 0.2s;
+    }
+    .input-group input:focus {
+      outline: none; border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+    }
+    button {
+      padding: 0.7rem 1.8rem; background: #667eea; color: white;
+      border: none; border-radius: 8px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; font-size: 0.9rem;
+    }
+    button:hover { background: #5568d3; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+    button:active { transform: translateY(0); }
+    
+    .main-container { flex: 1; display: flex; overflow: hidden; }
+    
+    .sidebar {
+      width: 340px; background: white; border-right: 1px solid #e2e8f0;
+      overflow-y: auto; display: flex; flex-direction: column;
+    }
+    .sidebar-content { flex: 1; padding: 1.5rem; }
+    .sidebar h2 {
+      font-size: 1.15rem; margin-bottom: 1rem; color: #2d3748; 
+      border-bottom: 3px solid #667eea; padding-bottom: 0.6rem;
+    }
+    
+    #status {
+      padding: 1rem; border-radius: 8px; margin-bottom: 1rem;
+      font-size: 0.85rem; font-weight: 500; min-height: 3em;
+      display: flex; align-items: center;
+    }
+    .success { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+    .warning { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+    .error { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+    
+    .layer-item {
+      padding: 1rem; margin: 0.6rem 0; background: #f8f9fa; 
+      border-radius: 8px; border-left: 4px solid #cbd5e0;
+      cursor: pointer; transition: all 0.3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .layer-item:hover {
+      background: #e7e9fc; transform: translateX(6px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .layer-item.active {
+      background: #e7e9fc; border-left-color: #38a169;
+      box-shadow: 0 4px 12px rgba(56, 161, 105, 0.2);
+    }
+    .layer-header {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .layer-name {
+      font-weight: 600; color: #2d3748; font-size: 0.95rem;
+      display: flex; align-items: center; gap: 0.6rem;
+    }
+    .layer-type {
+      font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 4px;
+      background: #e2e8f0; color: #4a5568; font-weight: 600;
+    }
+    .layer-type.point { background: #fecaca; color: #991b1b; }
+    .layer-type.polygon { background: #bfdbfe; color: #1e40af; }
+    .layer-type.line { background: #d1fae5; color: #065f46; }
+    .layer-count {
+      font-size: 0.75rem; color: #6b7280; margin-top: 0.4rem;
+    }
+    
+    #map { flex: 1; position: relative; }
+    
+    .map-controls {
+      position: absolute; top: 80px; right: 10px; z-index: 1000;
+      background: white; padding: 0; border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      width: 280px;
+      max-height: calc(100vh - 100px);
+      display: flex;
+      flex-direction: column;
+    }
+    .map-controls-tabs {
+      display: flex;
+      border-bottom: 2px solid #e5e7eb;
+      background: #f9fafb;
+      border-radius: 10px 10px 0 0;
+    }
+    .map-controls-tab {
+      flex: 1;
+      padding: 0.8rem 0.5rem;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #6b7280;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .map-controls-tab:hover {
+      background: #f3f4f6;
+      color: #4b5563;
+    }
+    .map-controls-tab.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+      background: white;
+    }
+    .map-controls-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
+    .map-controls h4 {
+      font-size: 0.85rem; margin: 0 0 0.7rem 0;
+      color: #2d3748; font-weight: 700;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .map-controls button {
+      display: block; width: 100%; margin: 0.4rem 0;
+      padding: 0.6rem; font-size: 0.85rem;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .map-controls button:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+    .base-map-selector {
+      margin-bottom: 1.2rem;
+    }
+    .base-map-selector label {
+      display: flex; align-items: center;
+      padding: 0.6rem 0.5rem; margin: 0.3rem 0;
+      cursor: pointer; border-radius: 6px;
+      transition: all 0.2s;
+      font-size: 0.85rem;
+      color: #4a5568;
+      font-weight: 500;
+      border: 2px solid transparent;
+    }
+    .base-map-selector label:hover {
+      background: #f3f4f6;
+      border-color: #e5e7eb;
+    }
+    .base-map-selector input[type="radio"]:checked + span {
+      color: #667eea;
+      font-weight: 700;
+    }
+    .base-map-selector input[type="radio"] {
+      margin-right: 0.6rem;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    .base-map-selector label:has(input:checked) {
+      background: #e7e9fc;
+      border-color: #667eea;
+    }
+    
+    .file-upload {
+      margin: 1rem 0;
+    }
+    .file-upload input[type="file"] {
+      display: none;
+    }
+    .file-upload-label {
+      display: block;
+      padding: 0.7rem;
+      background: #10b981;
+      color: white;
+      text-align: center;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .file-upload-label:hover {
+      background: #059669;
+      transform: translateY(-1px);
+    }
+    .uploaded-files {
+      margin-top: 0.8rem;
+      max-height: none;
+      overflow-y: visible;
+    }
+    .uploaded-file-item {
+      display: flex;
+      flex-direction: column;
+      padding: 0.6rem;
+      margin: 0.4rem 0;
+      background: #f0fdf4;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      border-left: 3px solid #10b981;
+    }
+    .uploaded-file-name {
+      color: #065f46;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+    }
+    .remove-file-btn {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 0.5rem 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      width: 100%;
+      margin-top: 0.4rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .remove-file-btn:hover {
+      background: #dc2626;
+    }
+    .empty-files-msg {
+      text-align: center;
+      color: #9ca3af;
+      font-size: 0.8rem;
+      padding: 1rem;
+      font-style: italic;
+    }
+    
+    .coordinate-search {
+      margin-top: 1rem;
+    }
+    .coordinate-input-group {
+      margin: 0.5rem 0;
+    }
+    .coordinate-input-group label {
+      display: block;
+      font-size: 0.75rem;
+      color: #4a5568;
+      margin-bottom: 0.3rem;
+      font-weight: 600;
+    }
+    .coordinate-input-group input,
+    .coordinate-input-group select {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .coordinate-input-group input:focus,
+    .coordinate-input-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+    }
+    .coordinate-search-btn {
+      width: 100%;
+      padding: 0.6rem;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: all 0.2s;
+    }
+    .coordinate-search-btn:hover {
+      background: #059669;
+      transform: translateY(-1px);
+    }
+    .search-marker {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .leaflet-popup-content {
+      font-size: 0.85rem; line-height: 1.7; max-width: 320px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .popup-title {
+      font-weight: 700; color: #667eea; font-size: 1.1rem;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 0.6rem; margin-bottom: 0.8rem;
+      display: flex; align-items: center; gap: 0.5rem;
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 10;
+    }
+    .popup-field {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 0.5rem;
+      margin: 0.3rem 0;
+      padding: 0.4rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .popup-field:nth-child(even) {
+      background: #f9fafb;
+    }
+    .popup-field:last-child { border-bottom: none; }
+    .popup-field strong {
+      color: #4a5568;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .popup-field span {
+      word-break: break-word; 
+      color: #1a202c; 
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .popup-section {
+      margin: 0.8rem 0;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 0.6rem;
+    }
+    .popup-section-title {
+      font-size: 0.75rem;
+      color: #6b7280;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.5px;
+    }
+    
+    .legend {
+      background: white; padding: 1rem; border-radius: 8px;
+      margin-top: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .legend h3 {
+      font-size: 0.9rem; color: #2d3748; margin-bottom: 0.8rem;
+      font-weight: 600;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 0.6rem;
+      margin: 0.5rem 0; font-size: 0.8rem;
+    }
+    .legend-color {
+      width: 24px; height: 24px; border-radius: 4px;
+      border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .legend-color.point {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: none;
+    }
+    .legend-color.line {
+      width: 30px;
+      height: 4px;
+      border-radius: 2px;
+      border: none;
+    }
+    .legend-color.polygon {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 2px solid;
+      opacity: 0.5;
+    }
+    
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid #f3f3f3; border-top: 2px solid #667eea;
+      border-radius: 50%; animation: spin 1s linear infinite;
+      margin-right: 0.6rem;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🗺️ Geoportal - Visor de Capas Geoespaciales</h1>
+  </header>
+
+  <div class="config-panel">
+    <div class="input-group">
+      <label>🔗 Project URL</label>
+      <input id="url" placeholder="https://tu-proyecto.supabase.co" />
+      <small>Tu URL de proyecto Supabase</small>
+    </div>
+    <div class="input-group">
+      <label>🔑 API Key (anon key)</label>
+      <input id="key" type="password" placeholder="eyJhbGciOi..." />
+      <small>Clave pública de tu proyecto</small>
+    </div>
+    <button onclick="cargarCapas()">🚀 Conectar y Cargar Capas</button>
+  </div>
+
+  <div class="main-container">
+    <aside class="sidebar">
+      <div class="sidebar-content">
+        <h2>📋 Capas Espaciales</h2>
+        <div id="status"></div>
+        <div id="layers"></div>
+        <div id="legend" class="legend" style="display:none;">
+          <h3>🎨 Leyenda</h3>
+          <div id="legend-content"></div>
+        </div>
+      </div>
+    </aside>
+    <div id="map">
+      <div class="map-controls">
+        <div class="map-controls-tabs">
+          <div class="map-controls-tab active" onclick="switchTab('mapbase')">🗺️ Mapa</div>
+          <div class="map-controls-tab" onclick="switchTab('tools')">⚙️ Herramientas</div>
+          <div class="map-controls-tab" onclick="switchTab('files')">📂 Archivos</div>
+        </div>
+        <div class="map-controls-content">
+          <!-- Tab: Mapa Base -->
+          <div id="tab-mapbase" class="tab-panel active">
+            <h4>🗺️ Mapa Base</h4>
+            <div class="base-map-selector">
+              <label>
+                <input type="radio" name="basemap" value="osm" checked onchange="changeBaseMap('osm')">
+                <span>🌍 OpenStreetMap</span>
+              </label>
+              <label>
+                <input type="radio" name="basemap" value="satellite" onchange="changeBaseMap('satellite')">
+                <span>🛰️ Satélite</span>
+              </label>
+              <label>
+                <input type="radio" name="basemap" value="topo" onchange="changeBaseMap('topo')">
+                <span>⛰️ Topográfico</span>
+              </label>
+              <label>
+                <input type="radio" name="basemap" value="dark" onchange="changeBaseMap('dark')">
+                <span>🌙 Oscuro</span>
+              </label>
+              <label>
+                <input type="radio" name="basemap" value="streets" onchange="changeBaseMap('streets')">
+                <span>🚗 Calles</span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- Tab: Herramientas -->
+          <div id="tab-tools" class="tab-panel">
+            <h4>⚙️ Controles</h4>
+            <button onclick="fitAllLayers()">🎯 Ajustar Vista</button>
+            <button onclick="clearAllLayers()">🗑️ Limpiar Capas Supabase</button>
+            <button onclick="clearAllKMZ()">🧹 Limpiar Archivos KMZ</button>
+            <button onclick="clearEverything()">❌ Limpiar Todo</button>
+            
+            <h4 style="margin-top: 1.5rem;">🔍 Buscar Coordenadas</h4>
+            <div class="coordinate-search">
+              <div class="coordinate-input-group">
+                <label>Zona UTM</label>
+                <select id="utmZone">
+                  <option value="17">Zona 17S (Norte de Perú)</option>
+                  <option value="18" selected>Zona 18S (Centro de Perú)</option>
+                  <option value="19">Zona 19S (Sur de Perú)</option>
+                </select>
+              </div>
+              <div class="coordinate-input-group">
+                <label>Este (X) - metros</label>
+                <input type="number" id="utmEast" placeholder="Ej: 500000">
+              </div>
+              <div class="coordinate-input-group">
+                <label>Norte (Y) - metros</label>
+                <input type="number" id="utmNorth" placeholder="Ej: 8500000">
+              </div>
+              <button class="coordinate-search-btn" onclick="searchUTMCoordinates()">
+                📍 Buscar Ubicación
+              </button>
+            </div>
+          </div>
+          
+          <!-- Tab: Archivos -->
+          <div id="tab-files" class="tab-panel">
+            <h4>📂 Cargar Archivo</h4>
+            <div class="file-upload">
+              <input type="file" id="kmzFileInput" accept=".kmz,.kml" onchange="loadKMZFile(event)">
+              <label for="kmzFileInput" class="file-upload-label">
+                📤 Subir KMZ/KML
+              </label>
+            </div>
+            <h4 style="margin-top: 1rem;">📄 Archivos Cargados</h4>
+            <div id="uploadedFiles" class="uploaded-files"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>
+    let map, supabaseUrl, supabaseKey, currentBaseLayer, searchMarker;
+    const activeLayers = {};
+    const layerData = {};
+    const uploadedKMZLayers = {};
+
+    // Función GLOBAL para convertir UTM a Lat/Lon (WGS84)
+    window.utmToLatLon = function(easting, northing, zone, isSouthernHemisphere = true) {
+      // Constantes del elipsoide WGS84
+      const a = 6378137; // Radio ecuatorial
+      const e = 0.081819191; // Excentricidad
+      const e2 = e * e;
+      const e4 = e2 * e2;
+      const e6 = e4 * e2;
+      
+      const k0 = 0.9996; // Factor de escala
+      
+      // Calcular meridiano central
+      const lonOrigin = (zone - 1) * 6 - 180 + 3;
+      
+      // Ajustar northing para hemisferio sur
+      const N = isSouthernHemisphere ? northing - 10000000 : northing;
+      
+      // Remover falso este
+      const E = easting - 500000;
+      
+      // Calcular M (distancia meridional)
+      const M = N / k0;
+      
+      // Calcular latitud del pie (footpoint latitude)
+      const mu = M / (a * (1 - e2/4 - 3*e4/64 - 5*e6/256));
+      
+      const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+      
+      const phi1 = mu + 
+                   (3*e1/2 - 27*e1*e1*e1/32) * Math.sin(2*mu) +
+                   (21*e1*e1/16 - 55*e1*e1*e1*e1/32) * Math.sin(4*mu) +
+                   (151*e1*e1*e1/96) * Math.sin(6*mu);
+      
+      // Calcular constantes
+      const C1 = e2 * Math.cos(phi1) * Math.cos(phi1);
+      const T1 = Math.tan(phi1) * Math.tan(phi1);
+      const N1 = a / Math.sqrt(1 - e2 * Math.sin(phi1) * Math.sin(phi1));
+      const R1 = a * (1 - e2) / Math.pow(1 - e2 * Math.sin(phi1) * Math.sin(phi1), 1.5);
+      const D = E / (N1 * k0);
+      
+      // Calcular latitud
+      let lat = phi1 - (N1 * Math.tan(phi1) / R1) * 
+                (D*D/2 - 
+                 (5 + 3*T1 + 10*C1 - 4*C1*C1 - 9*e2) * D*D*D*D/24 +
+                 (61 + 90*T1 + 298*C1 + 45*T1*T1 - 252*e2 - 3*C1*C1) * D*D*D*D*D*D/720);
+      
+      // Calcular longitud
+      let lon = (D - 
+                 (1 + 2*T1 + C1) * D*D*D/6 +
+                 (5 - 2*C1 + 28*T1 - 3*C1*C1 + 8*e2 + 24*T1*T1) * D*D*D*D*D/120) / 
+                Math.cos(phi1);
+      
+      // Convertir de radianes a grados
+      lat = lat * 180 / Math.PI;
+      lon = lonOrigin + lon * 180 / Math.PI;
+      
+      return [lat, lon];
+    };
+
+    // Definir mapas base
+    const baseMaps = {
+      osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }),
+      satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '© Esri',
+        maxZoom: 19
+      }),
+      topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenTopoMap contributors',
+        maxZoom: 17
+      }),
+      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© CartoDB',
+        maxZoom: 19
+      }),
+      streets: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '© CartoDB',
+        maxZoom: 19
+      })
+    };
+
+    // Inicializar mapa centrado en Perú
+    map = L.map('map').setView([-9.19, -75.0152], 6);
+    currentBaseLayer = baseMaps.osm.addTo(map);
+
+    // Función para cambiar mapa base
+    function changeBaseMap(mapType) {
+      if (currentBaseLayer) {
+        map.removeLayer(currentBaseLayer);
+      }
+      currentBaseLayer = baseMaps[mapType];
+      currentBaseLayer.addTo(map);
+    }
+
+    // Función para cambiar de pestaña
+    function switchTab(tabName) {
+      // Desactivar todas las pestañas
+      document.querySelectorAll('.map-controls-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
+      });
+      
+      // Activar la pestaña seleccionada
+      event.target.classList.add('active');
+      document.getElementById('tab-' + tabName).classList.add('active');
+    }
+
+    // Función para cargar archivos KMZ/KML
+    async function loadKMZFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const status = document.getElementById('status');
+      status.innerHTML = `<span class="spinner"></span>Cargando ${file.name}...`;
+      status.className = '';
+
+      try {
+        const fileName = file.name;
+        const fileExt = fileName.split('.').pop().toLowerCase();
+
+        let kmlContent;
+
+        if (fileExt === 'kmz') {
+          // Descomprimir KMZ
+          const arrayBuffer = await file.arrayBuffer();
+          const zip = await JSZip.loadAsync(arrayBuffer);
+          
+          // Buscar archivo KML dentro del KMZ
+          let kmlFile = null;
+          for (let filename in zip.files) {
+            if (filename.endsWith('.kml')) {
+              kmlFile = zip.files[filename];
+              break;
+            }
+          }
+
+          if (!kmlFile) {
+            throw new Error('No se encontró archivo KML dentro del KMZ');
+          }
+
+          kmlContent = await kmlFile.async('string');
+        } else if (fileExt === 'kml') {
+          // Leer KML directamente
+          kmlContent = await file.text();
+        } else {
+          throw new Error('Formato de archivo no soportado. Use KMZ o KML');
+        }
+
+        // Parsear KML a GeoJSON
+        const parser = new DOMParser();
+        const kmlDoc = parser.parseFromString(kmlContent, 'text/xml');
+        
+        // Verificar si hay errores de parseo
+        const parseError = kmlDoc.getElementsByTagName('parsererror');
+        if (parseError.length > 0) {
+          throw new Error('Error al parsear el archivo XML/KML');
+        }
+        
+        console.log('KML parseado correctamente');
+        const geojson = kmlToGeoJSON(kmlDoc);
+
+        if (!geojson.features || geojson.features.length === 0) {
+          // Mostrar información de debug
+          console.error('KML Document:', kmlDoc);
+          const placemarks = kmlDoc.getElementsByTagName('Placemark');
+          console.log('Placemarks encontrados:', placemarks.length);
+          
+          throw new Error(`No se encontraron geometrías válidas en el archivo. 
+            Placemarks encontrados: ${placemarks.length}. 
+            Verifica que el archivo KMZ/KML contenga geometrías válidas (puntos, líneas o polígonos).`);
+        }
+
+        // Crear capa y agregar al mapa
+        const kmzLayer = L.geoJSON(geojson, {
+          pointToLayer: (feature, latlng) => {
+            const marker = L.circleMarker(latlng, {
+              radius: 8,
+              fillColor: '#f97316',
+              color: '#f97316',
+              weight: 0,
+              opacity: 1,
+              fillOpacity: 1
+            });
+            
+            // Asegurar que el estilo se aplique inmediatamente
+            marker.setStyle({
+              fillColor: '#f97316',
+              fillOpacity: 1,
+              weight: 0
+            });
+            
+            return marker;
+          },
+          style: (feature) => {
+            return {
+              color: '#f97316',
+              weight: 3,
+              opacity: 0.8,
+              fillOpacity: 0.3,
+              fillColor: '#f97316'
+            };
+          },
+          onEachFeature: (feature, layer) => {
+            if (feature.properties) {
+              let popupContent = `<div class="popup-title">📄 ${fileName}</div>`;
+              
+              // Filtrar y organizar propiedades
+              const props = feature.properties;
+              const importantFields = [];
+              const otherFields = [];
+              
+              // Campos importantes primero
+              const priorityKeys = ['name', 'NAME', 'nombre', 'NOMBRE', 'description', 'DESCRIPTION'];
+              
+              Object.entries(props).forEach(([key, value]) => {
+                if (value && value !== '' && key !== 'styleUrl' && key !== 'styleHash') {
+                  const entry = { key, value };
+                  if (priorityKeys.some(pk => key.toLowerCase().includes(pk.toLowerCase()))) {
+                    importantFields.push(entry);
+                  } else {
+                    otherFields.push(entry);
+                  }
+                }
+              });
+              
+              // Agregar campos importantes
+              if (importantFields.length > 0) {
+                importantFields.forEach(({ key, value }) => {
+                  popupContent += `<div class="popup-field"><strong>${key}</strong> <span>${value}</span></div>`;
+                });
+              }
+              
+              // Agregar otros campos (máximo 15)
+              if (otherFields.length > 0) {
+                if (importantFields.length > 0) {
+                  popupContent += '<div class="popup-section"><div class="popup-section-title">Información adicional</div>';
+                }
+                otherFields.slice(0, 15).forEach(({ key, value }) => {
+                  // Acortar valores muy largos
+                  let displayValue = String(value);
+                  if (displayValue.length > 50) {
+                    displayValue = displayValue.substring(0, 47) + '...';
+                  }
+                  popupContent += `<div class="popup-field"><strong>${key}</strong> <span>${displayValue}</span></div>`;
+                });
+                if (importantFields.length > 0) {
+                  popupContent += '</div>';
+                }
+                
+                // Mostrar contador si hay más campos
+                if (otherFields.length > 15) {
+                  popupContent += `<div style="text-align: center; color: #9ca3af; font-size: 0.75rem; margin-top: 0.5rem; font-style: italic;">... y ${otherFields.length - 15} campos más</div>`;
+                }
+              }
+              
+              layer.bindPopup(popupContent, {
+                maxWidth: 350,
+                maxHeight: 400
+              });
+            }
+          }
+        }).addTo(map);
+
+        // Guardar referencia
+        const layerId = 'kmz_' + Date.now();
+        
+        // Detectar tipo de geometría dominante
+        const geomTypes = geojson.features.map(f => f.geometry.type.toLowerCase());
+        const pointCount = geomTypes.filter(t => t.includes('point')).length;
+        const lineCount = geomTypes.filter(t => t.includes('line')).length;
+        const polyCount = geomTypes.filter(t => t.includes('polygon')).length;
+        
+        let dominantType = 'point';
+        if (polyCount > pointCount && polyCount > lineCount) dominantType = 'polygon';
+        else if (lineCount > pointCount && lineCount > polyCount) dominantType = 'line';
+        
+        uploadedKMZLayers[layerId] = {
+          layer: kmzLayer,
+          name: fileName,
+          geomType: dominantType
+        };
+
+        // Ajustar vista
+        map.fitBounds(kmzLayer.getBounds(), { padding: [50, 50] });
+
+        // Agregar a lista de archivos cargados
+        addUploadedFileToList(layerId, fileName, geojson.features.length);
+
+        status.innerHTML = `✅ ${fileName} cargado (${geojson.features.length} elementos)`;
+        status.className = 'success';
+
+        // Limpiar input
+        event.target.value = '';
+
+      } catch (err) {
+        status.innerHTML = '❌ Error al cargar archivo: ' + err.message;
+        status.className = 'error';
+        console.error('Error:', err);
+      }
+    }
+
+    // Convertir KML a GeoJSON (mejorado)
+    function kmlToGeoJSON(kmlDoc) {
+      const geojson = {
+        type: 'FeatureCollection',
+        features: []
+      };
+
+      // Extraer Placemarks
+      const placemarks = kmlDoc.getElementsByTagName('Placemark');
+      console.log('Placemarks encontrados:', placemarks.length);
+
+      for (let i = 0; i < placemarks.length; i++) {
+        const placemark = placemarks[i];
+        const feature = {
+          type: 'Feature',
+          properties: {},
+          geometry: null
+        };
+
+        // Extraer nombre
+        const nameEl = placemark.getElementsByTagName('name')[0];
+        if (nameEl) {
+          feature.properties.NAME = nameEl.textContent.trim();
+        }
+
+        // Extraer descripción
+        const descEl = placemark.getElementsByTagName('description')[0];
+        if (descEl) {
+          feature.properties.DESCRIPTION = descEl.textContent.trim();
+        }
+
+        // Extraer Extended Data (atributos adicionales)
+        const extendedData = placemark.getElementsByTagName('ExtendedData')[0];
+        if (extendedData) {
+          const dataElements = extendedData.getElementsByTagName('Data');
+          for (let j = 0; j < dataElements.length; j++) {
+            const dataEl = dataElements[j];
+            const attrName = dataEl.getAttribute('name');
+            const valueEl = dataEl.getElementsByTagName('value')[0];
+            if (attrName && valueEl) {
+              feature.properties[attrName] = valueEl.textContent.trim();
+            }
+          }
+          
+          // También buscar SimpleData
+          const simpleData = extendedData.getElementsByTagName('SimpleData');
+          for (let j = 0; j < simpleData.length; j++) {
+            const dataEl = simpleData[j];
+            const attrName = dataEl.getAttribute('name');
+            if (attrName && dataEl.textContent) {
+              feature.properties[attrName] = dataEl.textContent.trim();
+            }
+          }
+        }
+
+        // Extraer coordenadas - intentar diferentes formatos
+        let coordsEl = placemark.getElementsByTagName('coordinates')[0];
+        if (!coordsEl) {
+          console.log('No se encontraron coordenadas en Placemark', i);
+          continue;
+        }
+
+        const coordsText = coordsEl.textContent.trim();
+        console.log('Coordenadas raw:', coordsText.substring(0, 100));
+        
+        // Parsear coordenadas - pueden estar separadas por espacios, saltos de línea o comas
+        const coordPairs = coordsText.split(/[\s\n]+/).filter(c => c.length > 0);
+        const coords = coordPairs.map(coord => {
+          const parts = coord.split(',').map(p => parseFloat(p.trim()));
+          // KML es lon,lat,alt - GeoJSON es [lon, lat]
+          return [parts[0], parts[1]];
+        }).filter(c => !isNaN(c[0]) && !isNaN(c[1]));
+
+        if (coords.length === 0) {
+          console.log('No se pudieron parsear coordenadas en Placemark', i);
+          continue;
+        }
+
+        console.log('Coordenadas parseadas:', coords.length);
+
+        // Determinar tipo de geometría
+        if (placemark.getElementsByTagName('Point').length > 0) {
+          feature.geometry = {
+            type: 'Point',
+            coordinates: coords[0]
+          };
+        } else if (placemark.getElementsByTagName('LineString').length > 0) {
+          feature.geometry = {
+            type: 'LineString',
+            coordinates: coords
+          };
+        } else if (placemark.getElementsByTagName('Polygon').length > 0) {
+          // Para polígonos, las coordenadas del outer boundary
+          const outerBoundary = placemark.getElementsByTagName('outerBoundaryIs')[0];
+          if (outerBoundary) {
+            const outerCoords = outerBoundary.getElementsByTagName('coordinates')[0];
+            if (outerCoords) {
+              const outerText = outerCoords.textContent.trim();
+              const outerPairs = outerText.split(/[\s\n]+/).filter(c => c.length > 0);
+              const outerRing = outerPairs.map(coord => {
+                const parts = coord.split(',').map(p => parseFloat(p.trim()));
+                return [parts[0], parts[1]];
+              }).filter(c => !isNaN(c[0]) && !isNaN(c[1]));
+              
+              feature.geometry = {
+                type: 'Polygon',
+                coordinates: [outerRing]
+              };
+            }
+          } else {
+            // Si no hay outerBoundary, usar las coordenadas directamente
+            feature.geometry = {
+              type: 'Polygon',
+              coordinates: [coords]
+            };
+          }
+        } else if (placemark.getElementsByTagName('MultiGeometry').length > 0) {
+          // MultiGeometry - tomar la primera geometría encontrada
+          console.log('MultiGeometry detectado - procesando primera geometría');
+          if (placemark.getElementsByTagName('Point').length > 0) {
+            feature.geometry = { type: 'Point', coordinates: coords[0] };
+          } else if (placemark.getElementsByTagName('LineString').length > 0) {
+            feature.geometry = { type: 'LineString', coordinates: coords };
+          } else if (placemark.getElementsByTagName('Polygon').length > 0) {
+            feature.geometry = { type: 'Polygon', coordinates: [coords] };
+          }
+        } else {
+          // Intentar detectar por cantidad de coordenadas
+          if (coords.length === 1) {
+            feature.geometry = { type: 'Point', coordinates: coords[0] };
+          } else if (coords.length > 1) {
+            // Verificar si el primer y último punto son iguales (polígono cerrado)
+            const first = coords[0];
+            const last = coords[coords.length - 1];
+            if (first[0] === last[0] && first[1] === last[1]) {
+              feature.geometry = { type: 'Polygon', coordinates: [coords] };
+            } else {
+              feature.geometry = { type: 'LineString', coordinates: coords };
+            }
+          }
+        }
+
+        if (feature.geometry) {
+          geojson.features.push(feature);
+          console.log('Feature agregado:', feature.geometry.type);
+        }
+      }
+
+      console.log('Total features procesados:', geojson.features.length);
+      return geojson;
+    }
+
+    function addUploadedFileToList(layerId, fileName, count) {
+      const container = document.getElementById('uploadedFiles');
+      
+      // Remover mensaje de vacío si existe
+      const emptyMsg = container.querySelector('.empty-files-msg');
+      if (emptyMsg) {
+        container.removeChild(emptyMsg);
+      }
+      
+      // Truncar nombre del archivo si es muy largo para el botón
+      const maxLength = 25; // Máximo de caracteres para "Eliminar: nombre.kmz"
+      let displayName = fileName;
+      if (fileName.length > maxLength) {
+        displayName = fileName.substring(0, maxLength - 3) + '...';
+      }
+      
+      const item = document.createElement('div');
+      item.className = 'uploaded-file-item';
+      item.dataset.layerId = layerId;
+      item.innerHTML = `
+        <span class="uploaded-file-name" title="${fileName}">📄 ${fileName} (${count})</span>
+        <button class="remove-file-btn" onclick="removeUploadedFile('${layerId}')" title="Eliminar ${fileName}">
+          🗑️ Eliminar: ${displayName}
+        </button>
+      `;
+      container.appendChild(item);
+    }
+
+    function removeUploadedFile(layerId) {
+      if (uploadedKMZLayers[layerId]) {
+        map.removeLayer(uploadedKMZLayers[layerId].layer);
+        delete uploadedKMZLayers[layerId];
+        
+        // Remover de la lista visual
+        const container = document.getElementById('uploadedFiles');
+        const item = container.querySelector(`[data-layer-id="${layerId}"]`);
+        if (item) {
+          container.removeChild(item);
+        }
+        
+        // Actualizar leyenda
+        removeKMZFromLegend();
+        updateKMZInLegend();
+        
+        // Mostrar mensaje si no hay archivos
+        if (Object.keys(uploadedKMZLayers).length === 0) {
+          container.innerHTML = '<div class="empty-files-msg">No hay archivos cargados</div>';
+        }
+      }
+    }
+
+    function clearAllKMZ() {
+      Object.keys(uploadedKMZLayers).forEach(layerId => {
+        map.removeLayer(uploadedKMZLayers[layerId].layer);
+        delete uploadedKMZLayers[layerId];
+      });
+      
+      const container = document.getElementById('uploadedFiles');
+      container.innerHTML = '<div class="empty-files-msg">No hay archivos cargados</div>';
+      
+      // Limpiar de la leyenda
+      removeKMZFromLegend();
+      
+      const status = document.getElementById('status');
+      status.innerHTML = '✅ Todos los archivos KMZ/KML han sido eliminados';
+      status.className = 'success';
+    }
+
+    function clearEverything() {
+      clearAllLayers();
+      clearAllKMZ();
+      
+      const status = document.getElementById('status');
+      status.innerHTML = '✅ Todas las capas y archivos han sido eliminados';
+      status.className = 'success';
+    }
+
+    // Función para buscar coordenadas UTM
+    function searchUTMCoordinates() {
+      const zone = parseInt(document.getElementById('utmZone').value);
+      const east = parseFloat(document.getElementById('utmEast').value);
+      const north = parseFloat(document.getElementById('utmNorth').value);
+      const status = document.getElementById('status');
+
+      // Validar inputs
+      if (isNaN(east) || isNaN(north)) {
+        status.innerHTML = '⚠️ Por favor ingresa coordenadas válidas';
+        status.className = 'warning';
+        return;
+      }
+
+      // Validar rangos aproximados para Perú
+      if (east < 160000 || east > 900000) {
+        status.innerHTML = '⚠️ Coordenada Este fuera de rango (160,000 - 900,000)';
+        status.className = 'warning';
+        return;
+      }
+
+      if (north < 8400000 || north > 9900000) {
+        status.innerHTML = '⚠️ Coordenada Norte fuera de rango (8,400,000 - 9,900,000)';
+        status.className = 'warning';
+        return;
+      }
+
+      try {
+        // Convertir UTM a Lat/Lon (hemisferio sur)
+        const [lat, lon] = window.utmToLatLon(east, north, zone, true);
+
+        // Validar que las coordenadas estén en Perú aproximadamente
+        if (lon < -82 || lon > -68 || lat < -18.5 || lat > 0) {
+          status.innerHTML = '⚠️ Las coordenadas están fuera de Perú. Verifica la zona UTM y los valores';
+          status.className = 'warning';
+          return;
+        }
+
+        // Remover marcador anterior si existe
+        if (searchMarker) {
+          map.removeLayer(searchMarker);
+        }
+
+        // Crear marcador en la ubicación
+        searchMarker = L.marker([lat, lon], {
+          icon: L.divIcon({
+            className: 'search-marker',
+            html: '<div style="background: #ef4444; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          })
+        }).addTo(map);
+
+        // Crear popup con información
+        const popupContent = `
+          <div class="popup-title">📍 Ubicación Buscada</div>
+          <div class="popup-field"><strong>Zona UTM</strong> <span>${zone}S</span></div>
+          <div class="popup-field"><strong>Este (X)</strong> <span>${east.toLocaleString()} m</span></div>
+          <div class="popup-field"><strong>Norte (Y)</strong> <span>${north.toLocaleString()} m</span></div>
+          <div class="popup-field"><strong>Latitud</strong> <span>${lat.toFixed(6)}°</span></div>
+          <div class="popup-field"><strong>Longitud</strong> <span>${lon.toFixed(6)}°</span></div>
+        `;
+        
+        searchMarker.bindPopup(popupContent).openPopup();
+
+        // Centrar mapa en la ubicación
+        map.setView([lat, lon], 15);
+
+        status.innerHTML = `✅ Ubicación encontrada: ${lat.toFixed(6)}°, ${lon.toFixed(6)}°`;
+        status.className = 'success';
+
+        // Hacer que el marcador pulse
+        setTimeout(() => {
+          if (searchMarker) {
+            const markerEl = searchMarker.getElement();
+            if (markerEl) {
+              markerEl.style.animation = 'pulse 2s infinite';
+            }
+          }
+        }, 100);
+
+      } catch (err) {
+        status.innerHTML = '❌ Error al convertir coordenadas: ' + err.message;
+        status.className = 'error';
+        console.error('Error en conversión UTM:', err);
+      }
+    };
+
+    async function cargarCapas() {
+      const url = document.getElementById('url').value.trim();
+      const key = document.getElementById('key').value.trim();
+      const status = document.getElementById('status');
+      const layersDiv = document.getElementById('layers');
+      
+      layersDiv.innerHTML = '';
+      status.className = '';
+
+      if (!url || !key) {
+        status.innerHTML = '⚠️ Por favor completa la URL del proyecto y la API key';
+        status.className = 'warning';
+        return;
+      }
+      
+      supabaseUrl = url;
+      supabaseKey = key;
+      
+      status.innerHTML = '<span class="spinner"></span>Analizando tu base de datos...';
+
+      // Introspección GraphQL
+      const gql = `{
+        __schema {
+          queryType { fields { name } }
+        }
+      }`;
+
+      let fields;
+      try {
+        const res = await fetch(`${url}/graphql/v1`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': key,
+            'Authorization': `Bearer ${key}`
+          },
+          body: JSON.stringify({ query: gql })
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        const { data } = await res.json();
+        fields = data.__schema.queryType.fields.map(f => f.name);
+      } catch (err) {
+        status.innerHTML = '❌ Error de conexión: ' + err.message + ' (verifica tu URL y API key)';
+        status.className = 'error';
+        return;
+      }
+
+      const candidates = fields
+        .filter(n => n.endsWith('Collection'))
+        .map(n => n.slice(0, -'Collection'.length));
+
+      if (candidates.length === 0) {
+        status.innerHTML = '🚫 No se encontraron tablas accesibles en tu proyecto.';
+        status.className = 'error';
+        return;
+      }
+
+      status.innerHTML = `<span class="spinner"></span>Verificando acceso a ${candidates.length} tabla(s)...`;
+
+      const valid = [];
+      await Promise.all(candidates.map(async tbl => {
+        try {
+          const r = await fetch(`${url}/rest/v1/${tbl}?select=*&limit=1`, {
+            headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+          });
+          if (r.ok) valid.push(tbl);
+        } catch {}
+      }));
+
+      if (valid.length === 0) {
+        status.innerHTML = '❌ Las tablas existen pero no son accesibles con tu anon key actual.';
+        status.className = 'error';
+        return;
+      }
+
+      const spatialTables = [];
+      
+      for (const tbl of valid) {
+        try {
+          const r = await fetch(`${url}/rest/v1/${tbl}?select=*&limit=1`, {
+            headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (data.length > 0 && data[0].geom) {
+              const geomType = detectGeometryType(data[0].geom);
+              spatialTables.push({ name: tbl, type: geomType });
+            }
+          }
+        } catch {}
+      }
+
+      if (spatialTables.length === 0) {
+        status.innerHTML = `⚠️ Encontré ${valid.length} tabla(s) pero ninguna tiene geometrías`;
+        status.className = 'warning';
+        return;
+      }
+
+      status.innerHTML = `✅ ¡Perfecto! Encontré ${spatialTables.length} capa(s) espacial(es)`;
+      status.className = 'success';
+
+      // Mostrar leyenda
+      document.getElementById('legend').style.display = 'block';
+      updateLegend(spatialTables);
+
+      for (const layer of spatialTables) {
+        const div = document.createElement('div');
+        div.className = 'layer-item';
+        div.dataset.geomType = layer.type;
+        div.innerHTML = `
+          <div class="layer-header">
+            <div class="layer-name">
+              <span>${getIconForTable(layer.name)}</span> 
+              ${formatTableName(layer.name)}
+            </div>
+            <span class="layer-type ${layer.type}">${getTypeLabel(layer.type)}</span>
+          </div>
+          <div class="layer-count">Clic para cargar</div>
+        `;
+        div.onclick = () => toggleLayer(layer.name, div);
+        div.dataset.table = layer.name;
+        layersDiv.appendChild(div);
+      }
+    }
+
+    function detectGeometryType(geom) {
+      const geomObj = typeof geom === 'string' ? JSON.parse(geom) : geom;
+      const type = geomObj.type.toLowerCase();
+      
+      if (type.includes('point')) return 'point';
+      if (type.includes('polygon')) return 'polygon';
+      if (type.includes('line')) return 'line';
+      return 'unknown';
+    }
+
+    function getTypeLabel(type) {
+      const labels = {
+        'point': 'PUNTO',
+        'polygon': 'POLÍGONO',
+        'line': 'LÍNEA',
+        'unknown': 'OTRO'
+      };
+      return labels[type] || 'OTRO';
+    }
+
+    async function toggleLayer(table, layerItem) {
+      if (activeLayers[table]) {
+        map.removeLayer(activeLayers[table]);
+        delete activeLayers[table];
+        layerItem.classList.remove('active');
+        layerItem.querySelector('.layer-count').textContent = 'Clic para cargar';
+      } else {
+        layerItem.classList.add('active');
+        await loadLayer(table, layerItem);
+      }
+    }
+
+    async function loadLayer(table, layerItem) {
+      const status = document.getElementById('status');
+      status.innerHTML = `<span class="spinner"></span>Cargando ${formatTableName(table)}...`;
+      status.className = '';
+
+      try {
+        const res = await fetch(`${supabaseUrl}/rest/v1/${table}?select=*&limit=2000`, {
+          headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
+        });
+        
+        if (!res.ok) throw new Error('Error al cargar datos');
+        const data = await res.json();
+        
+        if (data.length === 0) {
+          status.innerHTML = `⚠️ ${formatTableName(table)} está vacía`;
+          status.className = 'warning';
+          return;
+        }
+
+        const geomType = detectGeometryType(data[0].geom);
+        const geojsonLayer = L.geoJSON(null, {
+          pointToLayer: (feature, latlng) => {
+            const marker = L.circleMarker(latlng, {
+              radius: 8,
+              fillColor: getColorForTable(table),
+              color: getColorForTable(table),
+              weight: 0,
+              opacity: 1,
+              fillOpacity: 1
+            });
+            
+            // Asegurar que el estilo se aplique inmediatamente
+            marker.setStyle({
+              fillColor: getColorForTable(table),
+              fillOpacity: 1,
+              weight: 0
+            });
+            
+            return marker;
+          },
+          style: (feature) => {
+            const isPolygon = feature.geometry.type.toLowerCase().includes('polygon');
+            return {
+              color: getColorForTable(table),
+              weight: isPolygon ? 2 : 3,
+              opacity: 0.9,
+              fillOpacity: isPolygon ? 0.25 : 0,
+              fillColor: getColorForTable(table)
+            };
+          },
+          onEachFeature: (feature, layer) => {
+            layer.bindPopup(createPopupContent(feature.properties, table, geomType));
+            
+            // Hover effect
+            layer.on('mouseover', function() {
+              if (geomType === 'point') {
+                this.setStyle({ 
+                  radius: 11, 
+                  weight: 2, 
+                  color: '#ffffff',
+                  fillOpacity: 1
+                });
+              } else {
+                this.setStyle({ weight: 4, opacity: 1 });
+              }
+            });
+            layer.on('mouseout', function() {
+              if (geomType === 'point') {
+                this.setStyle({ 
+                  radius: 8, 
+                  weight: 0, 
+                  color: getColorForTable(table),
+                  fillOpacity: 1 
+                });
+              } else {
+                this.setStyle({ 
+                  weight: geomType === 'polygon' ? 2 : 3, 
+                  opacity: 0.9 
+                });
+              }
+            });
+          }
+        });
+
+        let validCount = 0;
+        data.forEach(record => {
+          if (record.geom) {
+            try {
+              const geom = typeof record.geom === 'string' ? JSON.parse(record.geom) : record.geom;
+              geojsonLayer.addData({
+                type: 'Feature',
+                geometry: geom,
+                properties: record
+              });
+              validCount++;
+            } catch (e) {
+              console.error('Error parsing geometry:', e);
+            }
+          }
+        });
+
+        if (validCount === 0) {
+          status.innerHTML = `❌ No se pudieron cargar geometrías de ${formatTableName(table)}`;
+          status.className = 'error';
+          return;
+        }
+
+        geojsonLayer.addTo(map);
+        activeLayers[table] = geojsonLayer;
+        layerData[table] = geojsonLayer;
+
+        // Forzar redibujado para asegurar que los estilos se apliquen
+        setTimeout(() => {
+          geojsonLayer.eachLayer(layer => {
+            if (layer instanceof L.CircleMarker) {
+              layer.setStyle({
+                fillColor: getColorForTable(table),
+                fillOpacity: 1,
+                weight: 0,
+                color: getColorForTable(table)
+              });
+            }
+          });
+        }, 100);
+
+        if (geojsonLayer.getBounds().isValid()) {
+          map.fitBounds(geojsonLayer.getBounds(), { padding: [50, 50] });
+        }
+
+        status.innerHTML = `✅ ${formatTableName(table)} cargado (${validCount} elementos)`;
+        status.className = 'success';
+        layerItem.querySelector('.layer-count').textContent = `${validCount} ${getTypeLabel(geomType).toLowerCase()}(s)`;
+
+      } catch (err) {
+        status.innerHTML = '❌ Error al cargar ' + formatTableName(table);
+        status.className = 'error';
+        console.error(err);
+      }
+    }
+
+    function createPopupContent(props, table, geomType) {
+      const typeIcon = geomType === 'point' ? '📍' : geomType === 'polygon' ? '🔷' : '〰️';
+      let html = `<div class="popup-title">${typeIcon} ${formatTableName(table)}</div>`;
+      
+      const relevantKeys = {
+        'barrios': ['BARRIO', 'PARROQUIAS', 'TIPO', 'AREA'],
+        'bomberos_wgs84': ['parroquia', 'sector', 'manzana', 'propietari', 'equip'],
+        'policia_wgs84': ['parroquia', 'tipo_parr', 'circuitos'],
+        'salud_wgs84': ['nombre', 'categoria', 'tipo', 'prr'],
+        'agua_potable': ['LintrasmAP', 'Shape_Area'],
+        'alcantarillado': ['Entity', 'Layer']
+      };
+
+      const keys = relevantKeys[table] || Object.keys(props)
+        .filter(k => !['geom', 'id', 'gid', 'objectid', 'fid'].includes(k.toLowerCase()))
+        .slice(0, 8);
+
+      keys.forEach(key => {
+        const value = props[key];
+        if (value !== null && value !== undefined && value !== '') {
+          html += `<div class="popup-field"><strong>${key}</strong> <span>${value}</span></div>`;
+        }
+      });
+
+      return html;
+    }
+
+    function updateLegend(layers) {
+      const legendContent = document.getElementById('legend-content');
+      legendContent.innerHTML = '';
+      
+      layers.forEach(layer => {
+        const color = getColorForTable(layer.name);
+        const geomType = layer.type;
+        let symbolClass = geomType;
+        let symbolStyle = `background: ${color};`;
+        
+        if (geomType === 'polygon') {
+          symbolStyle = `background: ${color}; border-color: ${color};`;
+        }
+        
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = `
+          <div class="legend-color ${symbolClass}" style="${symbolStyle}"></div>
+          <span>${formatTableName(layer.name)} (${getTypeLabel(layer.type)})</span>
+        `;
+        legendContent.appendChild(item);
+      });
+      
+      // Agregar capas KMZ si existen
+      updateKMZInLegend();
+    }
+    
+    function updateKMZInLegend() {
+      const legendContent = document.getElementById('legend-content');
+      
+      Object.values(uploadedKMZLayers).forEach(item => {
+        const geomType = item.geomType || 'point';
+        let symbolClass = geomType;
+        let symbolStyle = 'background: #f97316;';
+        
+        if (geomType === 'polygon') {
+          symbolStyle = 'background: #f97316; border-color: #f97316;';
+        }
+        
+        const legendItem = document.createElement('div');
+        legendItem.className = 'legend-item';
+        legendItem.dataset.kmzLayer = true;
+        legendItem.innerHTML = `
+          <div class="legend-color ${symbolClass}" style="${symbolStyle}"></div>
+          <span>📄 ${item.name}</span>
+        `;
+        legendContent.appendChild(legendItem);
+      });
+    }
+    
+    function removeKMZFromLegend() {
+      const legendContent = document.getElementById('legend-content');
+      const kmzItems = legendContent.querySelectorAll('[data-kmz-layer]');
+      kmzItems.forEach(item => item.remove());
+    }
+
+    function fitAllLayers() {
+      const allLayers = [];
+      
+      // Agregar capas de Supabase
+      Object.values(activeLayers).forEach(layer => {
+        allLayers.push(layer);
+      });
+      
+      // Agregar capas KMZ
+      Object.values(uploadedKMZLayers).forEach(item => {
+        allLayers.push(item.layer);
+      });
+      
+      if (allLayers.length === 0) {
+        const status = document.getElementById('status');
+        status.innerHTML = '⚠️ No hay capas activas para ajustar la vista';
+        status.className = 'warning';
+        return;
+      }
+      
+      // Crear un grupo con todas las capas
+      const group = L.featureGroup(allLayers);
+      
+      // Ajustar vista al bounds del grupo
+      if (group.getBounds().isValid()) {
+        map.fitBounds(group.getBounds(), { 
+          padding: [50, 50],
+          maxZoom: 16
+        });
+        
+        const status = document.getElementById('status');
+        status.innerHTML = '✅ Vista ajustada a todas las capas activas';
+        status.className = 'success';
+      }
+    }
+
+    function clearAllLayers() {
+      Object.keys(activeLayers).forEach(table => {
+        map.removeLayer(activeLayers[table]);
+        const layerItem = document.querySelector(`[data-table="${table}"]`);
+        if (layerItem) {
+          layerItem.classList.remove('active');
+          layerItem.querySelector('.layer-count').textContent = 'Clic para cargar';
+        }
+      });
+      Object.keys(activeLayers).forEach(key => delete activeLayers[key]);
+    }
+
+    function formatTableName(table) {
+      const names = {
+        'barrios': 'Barrios',
+        'bomberos_wgs84': 'Estaciones de Bomberos',
+        'policia_wgs84': 'UPC Policía',
+        'salud_wgs84': 'Centros de Salud',
+        'agua_potable': 'Red de Agua Potable',
+        'alcantarillado': 'Red de Alcantarillado'
+      };
+      return names[table] || table.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
+
+    function getIconForTable(table) {
+      const icons = {
+        'barrios': '🏘️',
+        'bomberos_wgs84': '🚒',
+        'policia_wgs84': '👮',
+        'salud_wgs84': '🏥',
+        'agua_potable': '💧',
+        'alcantarillado': '🚰'
+      };
+      return icons[table] || '📍';
+    }
+
+    function getColorForTable(table) {
+      const colors = {
+        'barrios': '#667eea',
+        'bomberos_wgs84': '#ef4444',
+        'policia_wgs84': '#3b82f6',
+        'salud_wgs84': '#10b981',
+        'agua_potable': '#06b6d4',
+        'alcantarillado': '#8b5cf6'
+      };
+      return colors[table] || '#6b7280';
+    }
+  </script>
+
+</body>
+</html>
